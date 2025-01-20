@@ -1,0 +1,28 @@
+
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "CDGS tools"
+version = "0.1"
+description = "some tools for using CDGS files"
+authors = [
+    { name = "Marco De Pietri", email = "mdepietri@ind.uned.es" }
+]
+
+# Python requirement
+requires-python = ">=3.12, <3.13"
+
+# Project dependencies (install_requires)
+dependencies = [
+  "numpy",
+  "vtk",
+  "pyvista",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
