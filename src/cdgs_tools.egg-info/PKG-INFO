@@ -1,0 +1,10 @@
+Metadata-Version: 2.2
+Name: cdgs-tools
+Version: 0.1
+Summary: some tools for using CDGS files
+Author-email: Marco De Pietri <mdepietri@ind.uned.es>
+Requires-Python: <3.13,>=3.12
+License-File: LICENSE
+Requires-Dist: numpy<2,>=1.21
+Requires-Dist: vtk
+Requires-Dist: pyvista

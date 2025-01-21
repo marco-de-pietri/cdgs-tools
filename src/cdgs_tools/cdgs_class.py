@@ -8,7 +8,32 @@ import math
 import sys
 import pyvista as pv
 
-from cdgs_node_class import CDGSCylinderNode
+from .cdgs_node_class import CDGSCylinderNode
+
+def get_node_comment(text):
+    """
+    function that parse the cdgs text to extract the node comment
+    """
+
+    commentPat = re.compile (r"^mesh_id.{1,}?(?=^Cooling_time)",re.IGNORECASE | re.MULTILINE | re.DOTALL)
+    commentLine = commentPat.findall(text)
+    return commentLine[0].splitlines()[1].strip(" \r\n")
+
+def get_cooling_time(text):
+    """
+    function that parse the cdgs text to extract the node cooling time
+    """
+
+    print (text)
+
+    cooling_time_pat = re.compile(r"[\r\n]cooling_time\s+.*", re.IGNORECASE )
+
+
+    ct_matches = cooling_time_pat.findall(text)
+
+    print (ct_matches)
+
+    return float(ct_matches[0].split()[1])
 
 
 def get_cylinder_geometry(text):
@@ -69,7 +94,7 @@ def get_mesh_id(text):
     function that parse the cdgs text to extract the mesh id
     """
 
-    pat_mesh_id = re.compile(r"^mesh_id\s+.*", re.IGNORECASE | re.MULTILINE)
+    pat_mesh_id = re.compile(r"^mesh_id\s+.*", re.IGNORECASE )
 
     mesh_line = pat_mesh_id.findall(text)
 
@@ -184,6 +209,12 @@ def read_cdgs_file(cdgs_file: str) -> object:
             node_intensity = get_node_intensity(node_text)
             cyl_node.node_intensity = node_intensity
 
+            node_comment = get_node_comment(node_text)
+            cyl_node.node_comment = node_comment
+
+            node_cooling_time = get_cooling_time(node_text)
+            cyl_node.cooling_time = node_cooling_time
+
             energy_bins = get_energy_bins(node_text)
             cyl_node.energy_bins = energy_bins
 
@@ -200,6 +231,7 @@ def read_cdgs_file(cdgs_file: str) -> object:
             cyl_node.calculate_volume()
             cyl_node.calculate_lateral_surface_area()
             cyl_node.calculate_end_point()
+            cyl_node.generate_cdgs_text()
 
             cdgs_object.add_node(cyl_node)
 
@@ -299,6 +331,19 @@ class CDGS:
         cdgs_subset.renumber_nodes()
 
         return cdgs_subset
+
+    def write_cdgs (self, output_file) -> None:
+        """
+        write the cdgs object to a file
+        """
+
+        with open(output_file, "w") as wf:
+            wf.write(f"num_meshes {self.tot_meshes}\n")
+            wf.write(f"global_source {self.tot_intensity:.8e}\n")
+
+            for node in self.nodes:
+                wf.write(node.cdgs_text)
+
 
 
 

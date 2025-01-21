@@ -4,7 +4,7 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "CDGS tools"
+name = "cdgs-tools"
 version = "0.1"
 description = "some tools for using CDGS files"
 authors = [
@@ -16,10 +16,14 @@ requires-python = ">=3.12, <3.13"
 
 # Project dependencies (install_requires)
 dependencies = [
-  "numpy",
+  "numpy>=1.21,<2",
   "vtk",
   "pyvista",
 ]
+
+
+[project.scripts]
+cdgs_stl_filter = "cdgs_tools.cdgs_filter:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
