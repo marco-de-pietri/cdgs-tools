@@ -6,89 +6,84 @@ import pyvista as pv
 from vtk import vtkSelectEnclosedPoints
 import numpy as np
 
+def write_vec(vec, npos, digits, spaces=1, spaces_new_line=0):
+    """
+    Line formatting with a specified number of spaces between numbers.
+    """
+    j = -1
+    new_line_empty = '' * spaces_new_line
+    line = new_line_empty
+    space_str = ' ' * spaces
+    for el_val in vec:
+        j = j + 1
+        if j == npos:
+            line = line + '\n' + new_line_empty
+            j = 0
+        line = line + f"{el_val:.{digits}e}{space_str}"
+    return line
+
+def rotation_matrix(axis, theta):
+    """
+    Return the rotation matrix associated with counterclockwise rotation about
+    the given axis by theta radians.
+    """
+    axis = np.asarray(axis)
+    axis = axis / math.sqrt(np.dot(axis, axis))
+    a_1 = math.cos(theta / 2.0)
+    b_1, c_1, d_1 = -axis * math.sin(theta / 2.0)
+    a_a, b_b, c_c, d_d = a_1 * a_1, b_1 * b_1, c_1 * c_1, d_1 * d_1
+    b_c, a_d, a_c, a_b, b_d, c_d = ( b_1 * c_1,
+                                     a_1 * d_1,
+                                     a_1 * c_1,
+                                     a_1 * b_1,
+                                     b_1 * d_1,
+                                     c_1 * d_1)
+    res = np.array([[a_a + b_b - c_c - d_d, 2 * (b_c + a_d), 2 * (b_d - a_c)],
+                     [2 * (b_c - a_d), a_a + c_c - b_b - d_d, 2 * (c_d + a_b)],
+                     [2 * (b_d + a_c), 2 * (c_d - a_b), a_a + d_d - b_b - c_c]])
+    return res
+
+def extend_pnt(point,axis, distance):
+    """
+    this function returns a point by extending a point, along a vector,
+    by a given distance
+    """
+
+    newpoint = [point[0] + axis[0]*distance,
+                point[1] + axis[1]*distance,
+                point[2] + axis[2]*distance]
+
+    return newpoint
+
+
 class CDGSNode:
     """
-    class for cdgs node
+    CDGS node generic class.
     """
+    def __init__(self) -> None:
+        self.mesh_id = 0
+        self.energy_bins = []
+        self.energy_bin_vals = []
+        self.energy_bin_errs = []
+        self.node_intensity_s = 0
+        self.node_intensity_m3_s = 0
+        self.node_comment = ""
+        self.cooling_time = 0
+        self.cdgs_text = ""
 
-    class CDGSNode:
-        """
-        CDGS node generic class.
-        """
-        def __init__(self) -> None:
-            self._mesh_id = 0
-            self._energy_bins = []
-            self._energy_bin_vals = []
-            self._node_intensity = 0
-            self._node_comment = ""
-            self._cooling_time = 0
-            self._cdgs_text = ""
+        self.vtk_points = []
+        self.vtk_points_text = ""
 
-        @property
-        def mesh_id(self) -> int:
-            """
-            Returns the mesh ID.
-            """
-            return self._mesh_id
-
-        @mesh_id.setter
-        def mesh_id(self, value: int) -> None:
-            self._mesh_id = value
-
-        @property
-        def cooling_time(self) -> float:
-            """
-            Returns the cooling time.
-            """
-            return self._cooling_time
-
-        @cooling_time.setter
-        def cooling_time(self, value: float) -> None:
-            self._cooling_time = value
-
-        @property
-        def node_comment(self) -> str:
-            """
-            Returns the string comment.
-            """
-            return self._node_comment
-
-        @node_comment.setter
-        def node_comment(self, value: str) -> None:
-            self._node_comment = value
-
-        @property
-        def node_intensity(self) -> float:
-            """
-            Returns the intensity of the node.
-            """
-            return self._node_intensity
-
-        @node_intensity.setter
-        def node_intensity(self, value: float) -> None:
-            self._node_intensity = value
-
-        @property
-        def cdgs_text(self) -> str:
-            """
-            Returns the CDGS text.
-            """
-            return self._cdgs_text
-
-        @cdgs_text.setter
-        def cdgs_text(self, value: str) -> None:
-            """
-            set the cdgs text
-            """
-            self._cdgs_text = value
+        self.vtk_cell_type = 0
+        self.vtk_point_ids = []
+        self.vtk_point_ids_text = ""
 
 
-
-        def __str__(self) -> str:
-            return (
-                f"CDGSNode object with mesh id {self.mesh_id} "
-                f"and node intensity {self.node_intensity:.2e}"
-            )
+    def __str__(self) -> str:
+        return (
+            f"CDGSNode object with mesh id {self.mesh_id} "
+            f"and node intensity {self.node_intensity_s:.2e}"
+        )
 class CDGSCylinderNode(CDGSNode):
     """
     class for cdgs cylinder node
@@ -96,46 +91,26 @@ class CDGSCylinderNode(CDGSNode):
 
     def __init__(self) -> None:
         super().__init__()
-        self._basis = []
-        self._end_point = []
-        self._axis = []
-        self._radius = 0
-        self._height = 0
-        self._node_volume = 0
-        self._lateral_surface_area = 0
+        self.basis_cm = []
+        self.end_point_cm = []
+        self.axis_1 = []
+        self.axis_2 = []
+        self.radius_cm = 0
+        self.height_cm = 0
+        self.node_volume_cm3 = 0
+        self.node_volume_m3 = 0
+        self.lateral_surface_area_cm2 = 0
 
-    @property
-    def basis(self) -> list:
-        """
-        Returns the basis list.
 
-        :return: A list representing the basis.
-        :rtype: list
-        """
-        return self._basis
-
-    @basis.setter
-    def basis(self, value: list) -> None:
-        self._basis = value
-
-    @property
-    def end_point(self) -> list:
-        """
-        Returns the end point list.
-
-        :return: A list representing the end point.
-        :rtype: list
-        """
-        return self._end_point
 
     def calculate_end_point(self) -> None:
         """
         Calculates the end point of the cylinder.
         """
-        self._end_point = [
-            self.basis[0] + self.axis[0] * self.height,
-            self.basis[1] + self.axis[1] * self.height,
-            self.basis[2] + self.axis[2] * self.height,
+        self.end_point_cm = [
+            self.basis_cm[0] + self.axis_1[0] * self.height_cm,
+            self.basis_cm[1] + self.axis_1[1] * self.height_cm,
+            self.basis_cm[2] + self.axis_1[2] * self.height_cm,
         ]
 
     def generate_cdgs_text(self) -> None:
@@ -146,87 +121,154 @@ class CDGSCylinderNode(CDGSNode):
         text += f"mesh_id {self.mesh_id}\n"
         text += f"{self.node_comment}\n"
         text += f"Cooling_time {self.cooling_time:.6e}\n"
-        text += f"total_source {self.node_intensity:.9e}\n"
+        text += f"total_source {self.node_intensity_s:.9e}\n"
         text += f"energy_type bins\n"
         text += f"energy_boundaries {len(self.energy_bins):d}\n"
+        text += write_vec(self.energy_bins, 6, 7)
+        text += "\n"
+        text += f"mesh_type cyl\n"
+        text += f"mesh_boundaries  2 2 2\n"
+        text += write_vec(self.basis_cm, 6, 6, 2)
+        text += "\n"
+        text += write_vec(self.axis_1, 6, 6, 2)
+        text += "\n"
+        text += write_vec(self.axis_2, 6, 6, 2)
+        text += "\n"
+        text += f"      0.0000  {self.radius_cm:>11.4f}\n"
+        text += f"      0.0000       1.0000\n"
+        text += f"      0.0000  {self.height_cm:>11.4f}\n"
+        text += f"source_data\n"
+        text += f"1  {self.node_intensity_s:.8e}  {self.node_volume_cm3:.8e} 1\n"
+        text += f"{self.mesh_id:d} 1.00000000e+00  {self.node_intensity_s:.8e}\n"
+        text += write_vec(self.energy_bin_vals, 6, 4, 3, 2)
+        text += "\n"
+        text += write_vec(self.energy_bin_errs, 6, 4, 3, 2)
+        text += "\n"
 
+        text += f"end_source_data\n"
         self.cdgs_text = text
 
         return
 
-    @property
-    def axis(self) -> list:
-        """
-        Returns the axis attribute.
-
-        Returns:
-            list: The axis attribute.
-        """
-        return self._axis
-
-    @axis.setter
-    def axis(self, value: list) -> None:
-        self._axis = value
-
-    @property
-    def radius(self) -> float:
-        """
-        Returns the radius of the node.
-
-        Returns:
-            float: The radius of the node.
-        """
-        return self._radius
-
-    @radius.setter
-    def radius(self, value: float) -> None:
-        self._radius = value
-
-    @property
-    def height(self) -> float:
-        """
-        Returns the length of the object.
-
-        Returns:
-            float: The length of the object.
-        """
-        return self._height
-
-    @height.setter
-    def height(self, value: float) -> None:
-        self._height = value
-
-    @property
-    def node_volume(self) -> float:
-        """
-        Returns the volume of the cylinder.
-
-        Returns:
-            float: The volume of the cylinder.
-        """
-        return self._node_volume
 
     def calculate_volume(self) -> None:
         """
         Calculates the volume of the cylinder.
         """
-        self._node_volume = math.pi * self.height * (self.radius ** 2)
+        self.node_volume_cm3 = math.pi * self.height_cm * (self.radius_cm ** 2)
+        self.node_volume_m3 =  self.node_volume_cm3 / 1e6
 
-    @property
-    def lateral_surface_area(self) -> float:
-        """
-        Returns the lateral surface area of the cylinder.
-
-        Returns:
-            float: The lateral surface area of the cylinder.
-        """
-        return self._lateral_surface_area
 
     def calculate_lateral_surface_area(self) -> None:
         """
         Calculates the lateral surface area of the cylinder.
         """
-        self._lateral_surface_area = 2 * math.pi * self.radius * self.height
+        self.lateral_surface_area_cm2 = 2 * math.pi * self.radius_cm * self.height_cm
+
+    def generate_vtk_points(self) -> None:
+        """
+        Calculates the VTK points of the cylinder.
+        """
+        pipe_axis_1 = [self.axis_1[0], self.axis_1[1], self.axis_1[2]]
+        pipe_axis_2 = [self.axis_2[0], self.axis_2[1], self.axis_2[2]]
+        radius_m = self.radius_cm/100
+        length_m = self.height_cm/100
+        pipe_origin_m = [self.basis_cm[0]/100,
+                         self.basis_cm[1]/100,
+                         self.basis_cm[2]/100]
+
+        pipe_end_m = extend_pnt(pipe_origin_m,
+                                       pipe_axis_1,
+                                       length_m)
+        pipe_mid_m = extend_pnt(pipe_origin_m,
+                                       pipe_axis_1,
+                                       length_m/2)
+
+        vector0   = pipe_axis_2
+
+        vector45  = np.dot(rotation_matrix(pipe_axis_1,math.pi/4), vector0)
+        vector90  = np.dot(rotation_matrix(pipe_axis_1,math.pi/2), vector0)
+        vector135 = np.dot(rotation_matrix(pipe_axis_1,math.pi*3/4),vector0)
+        vector180 = np.dot(rotation_matrix(pipe_axis_1,math.pi), vector0)
+        vector225 = np.dot(rotation_matrix(pipe_axis_1,math.pi*5/4), vector0)
+        vector270 = np.dot(rotation_matrix(pipe_axis_1,math.pi + math.pi/2),
+                           vector0)
+        vector315 = np.dot(rotation_matrix(pipe_axis_1,math.pi*7/4), vector0)
+
+        # reference :   https://vtk.org/doc/release/5.2/html/a00103.html
+
+        point00 = extend_pnt(pipe_origin_m,vector0,  radius_m)
+        point01 = extend_pnt(pipe_origin_m,vector90, radius_m)
+        point02 = extend_pnt(pipe_origin_m,vector180,radius_m)
+        point03 = extend_pnt(pipe_origin_m,vector270,radius_m)
+        point04 = extend_pnt(pipe_end_m,vector0,  radius_m)
+        point05 = extend_pnt(pipe_end_m,vector90, radius_m)
+        point06 = extend_pnt(pipe_end_m,vector180,radius_m)
+        point07 = extend_pnt(pipe_end_m,vector270,radius_m)
+        point08 = extend_pnt(pipe_origin_m,vector45,radius_m)
+        point09 = extend_pnt(pipe_origin_m,vector135,radius_m)
+        point10 = extend_pnt(pipe_origin_m,vector225,radius_m)
+        point11 = extend_pnt(pipe_origin_m,vector315,radius_m)
+        point12 = extend_pnt(pipe_end_m,vector45, radius_m)
+        point13 = extend_pnt(pipe_end_m,vector135,radius_m)
+        point14 = extend_pnt(pipe_end_m,vector225,radius_m)
+        point15 = extend_pnt(pipe_end_m,vector315,radius_m)
+        point16 = extend_pnt(pipe_mid_m,vector0,  radius_m)
+        point17 = extend_pnt(pipe_mid_m,vector90, radius_m)
+        point18 = extend_pnt(pipe_mid_m,vector180,radius_m)
+        point19 = extend_pnt(pipe_mid_m,vector270,radius_m)
+        point20 = extend_pnt(pipe_mid_m,vector315,radius_m)
+        point21 = extend_pnt(pipe_mid_m,vector135,radius_m)
+        point22 = extend_pnt(pipe_mid_m,vector45, radius_m)
+        point23 = extend_pnt(pipe_mid_m,vector225,radius_m)
+        pipe_points    = [point00,point01,point02,point03,point04,point05,
+                          point06,point07,point08,point09,point10,point11,
+                          point12,point13,point14,point15,point16,point17,
+                          point18,point19,point20,point21,point22,point23]
+
+        self.vtk_points = pipe_points
+        return
+
+    def generate_vtk_points_text(self) -> None:
+        """
+        Generates the VTK points text.
+        """
+        text = ""
+        i = 0
+        for coord in self.vtk_points:
+            if (i%3 == 0 ) and (i > 0):
+                text += '\r\n'
+                new_string = (f"{coord[0]:>.5f} "
+                              f"{coord[1]:>.5f} "
+                              f"{coord[2]:>.5f} ")
+                text += new_string
+                i = 1
+            else:
+                new_string = (f"{coord[0]:>.5f} "
+                              f"{coord[1]:>.5f} "
+                              f"{coord[2]:>.5f} ")
+                text += new_string
+                i += 1
+
+        text += '\r\n'
+
+        self.vtk_points_text = text
+
+        return
+
+    def generate_vtk_points_ids_text(self) -> None:
+        """
+        Generates the VTK points ids text.
+        """
+        text = ""
+        for id_n in self.vtk_point_ids:
+            text += f"{id_n:d} "
+
+        text += '\r\n'
+
+        self.vtk_point_ids_text = text
+
+        return
 
     def is_inside_stl(self, stl_mesh: object) -> bool:
         """
@@ -239,7 +281,7 @@ class CDGSCylinderNode(CDGSNode):
             bool: True if the cylinder is inside the STL file, False otherwise.
         """
 
-        check_points = [self.basis, self.end_point]
+        check_points = [self.basis_cm, self.end_point_cm]
 
         points_poly = pv.PolyData(check_points)
 
@@ -260,12 +302,12 @@ class CDGSCylinderNode(CDGSNode):
             f"CDGSCylinderNode object \n"
             f"PROPERTIES:\n"
             f"mesh id {self.mesh_id}\n"
-            f"intensity {self.node_intensity:.2e}\n"
-            f"basis {self.basis}\n"
-            f"end point {self.end_point}\n"
-            f"axis {self.axis}\n"
-            f"radius {self.radius}\n"
-            f"height {self.height}\n"
-            f"volume {self.node_volume:.2e}\n"
-            f"lateral surface area {self.lateral_surface_area:.2e}\n"
+            f"intensity {self.node_intensity_s:.2e}\n"
+            f"basis {self.basis_cm}\n"
+            f"end point {self.end_point_cm}\n"
+            f"axis 1 {self.axis_1}\n"
+            f"radius {self.radius_cm}\n"
+            f"height {self.height_cm}\n"
+            f"volume {self.node_volume_cm3:.2e}\n"
+            f"lateral surface area {self.lateral_surface_area_cm2:.2e}\n"
         )

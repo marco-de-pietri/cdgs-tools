@@ -23,7 +23,7 @@ dependencies = [
 
 
 [project.scripts]
-cdgs_stl_filter = "cdgs_tools.cdgs_filter:main"
+cdgs_stl_filter = "cdgs_tools.cdgs_stl_filter:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

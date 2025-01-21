@@ -1,2 +1,4 @@
 build/
 */cdgs_tools.egg-info/
+*/__pycache__/
+.venv/

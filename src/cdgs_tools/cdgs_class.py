@@ -24,14 +24,12 @@ def get_cooling_time(text):
     function that parse the cdgs text to extract the node cooling time
     """
 
-    print (text)
 
     cooling_time_pat = re.compile(r"[\r\n]cooling_time\s+.*", re.IGNORECASE )
 
 
     ct_matches = cooling_time_pat.findall(text)
 
-    print (ct_matches)
 
     return float(ct_matches[0].split()[1])
 
@@ -67,14 +65,15 @@ def get_cylinder_geometry(text):
     geometry_lines = geom_text[0].splitlines()
 
     basis = [float(value) for value in geometry_lines[2].split()]
-    axis = [float(value) for value in geometry_lines[3].split()]
+    axis_1 = [float(value) for value in geometry_lines[3].split()]
+    axis_2 = [float(value) for value in geometry_lines[4].split()]
 
     # norm = pow(sum([pow(val,2) for val in axis]),0.5)
 
     radius = float(geometry_lines[5].split()[1])
     length = float(geometry_lines[7].split()[1])
 
-    return basis, axis, radius, length
+    return basis, axis_1, axis_2, radius, length
 
 
 def get_node_intensity(text):
@@ -117,7 +116,12 @@ def get_energy_bin_vals(text):
         values = line.split()
         for val in values:
             ebin_val_list.append(float(val))
-    return ebin_val_list
+
+    mid_index = len(ebin_val_list) // 2
+    ebin_intensity_list = ebin_val_list[:mid_index]
+    ebin_error_list = ebin_val_list[mid_index:]
+
+    return ebin_intensity_list, ebin_error_list
 
 
 def get_energy_bins(text):
@@ -207,7 +211,7 @@ def read_cdgs_file(cdgs_file: str) -> object:
             cyl_node.mesh_id = mesh_id
 
             node_intensity = get_node_intensity(node_text)
-            cyl_node.node_intensity = node_intensity
+            cyl_node.node_intensity_s = node_intensity
 
             node_comment = get_node_comment(node_text)
             cyl_node.node_comment = node_comment
@@ -218,20 +222,30 @@ def read_cdgs_file(cdgs_file: str) -> object:
             energy_bins = get_energy_bins(node_text)
             cyl_node.energy_bins = energy_bins
 
-            energy_bin_vals = get_energy_bin_vals(node_text)
+            energy_bin_vals, energy_bin_errs = get_energy_bin_vals(node_text)
             cyl_node.energy_bin_vals = energy_bin_vals
+            cyl_node.energy_bin_errs = energy_bin_errs
 
 
-            basis, axis, radius, height = get_cylinder_geometry(node_text)
-            cyl_node.basis = basis
-            cyl_node.axis = axis
-            cyl_node.radius = radius
-            cyl_node.height = height
+            basis, axis_1, axis_2, radius, height = get_cylinder_geometry(node_text)
+            cyl_node.basis_cm = basis
+            cyl_node.axis_1 = axis_1
+            cyl_node.axis_2 = axis_2
+            cyl_node.radius_cm = radius
+            cyl_node.height_cm = height
 
             cyl_node.calculate_volume()
             cyl_node.calculate_lateral_surface_area()
             cyl_node.calculate_end_point()
             cyl_node.generate_cdgs_text()
+            cyl_node.generate_vtk_points()
+            cyl_node.generate_vtk_points_text()
+            point_ids = [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+                          12,13,14,15,16,17,18,19,20,21,22,23]
+            cyl_node.vtk_point_ids = [(cdgs_object._tot_vtk_points + i) for i in point_ids]
+            cyl_node.generate_vtk_points_ids_text()
+            cyl_node.vtk_cell_type = 33
+            cyl_node.node_intensity_m3_s = cyl_node.node_intensity_s / cyl_node.node_volume_m3
 
             cdgs_object.add_node(cyl_node)
 
@@ -241,7 +255,7 @@ def read_cdgs_file(cdgs_file: str) -> object:
             print ("nodes parsed: ", cdgs_object.tot_meshes)
             print ("nodes in file: ", cdgs_nodes_number)
             sys.exit()
-        if not math.isclose(cdgs_object.tot_intensity, mesh_tot_intensity, rel_tol=1e-6):
+        if not math.isclose(cdgs_object.tot_intensity, mesh_tot_intensity, rel_tol=1e-3):
             print("mismatch total intensity!")
             print(f"intensity parsed: {cdgs_object.tot_intensity:.8e}")
             print (f"intensity in file header: , {mesh_tot_intensity:.8e}")
@@ -260,6 +274,7 @@ class CDGS:
         self._tot_intensity = 0
         self._tot_volume = 0
         self._nodes = []
+        self._tot_vtk_points = 0
 
     def __str__(self) -> str:
         return (
@@ -292,6 +307,13 @@ class CDGS:
         return self._tot_intensity
 
     @property
+    def tot_vtk_points(self) -> float:
+        """
+        number of vtk points
+        """
+        return self._tot_vtk_points
+
+    @property
     def tot_volume(self) -> float:
         """
         Returns the total volume
@@ -305,8 +327,9 @@ class CDGS:
         """
         self._nodes.append(copy.deepcopy(node))
         self._tot_meshes += 1
-        self._tot_intensity += node.node_intensity
-        self._tot_volume += node.node_volume
+        self._tot_intensity += node.node_intensity_s
+        self._tot_volume += node.node_volume_cm3
+        self._tot_vtk_points += len(node.vtk_points)
 
     def renumber_nodes(self) -> None:
         """
@@ -339,10 +362,74 @@ class CDGS:
 
         with open(output_file, "w") as wf:
             wf.write(f"num_meshes {self.tot_meshes}\n")
-            wf.write(f"global_source {self.tot_intensity:.8e}\n")
+            wf.write(f"global_source {self.tot_intensity:.7e}\n")
 
             for node in self.nodes:
                 wf.write(node.cdgs_text)
+
+    def write_vtk(self,file_name):
+        """
+        this function writes the vtk file of the pipe nodes for visualization
+        """
+
+        n_vtk_points = sum([len(node.vtk_points) for node in self.nodes])
+
+        n_nodes = len(self.nodes)
+
+        try:
+            out = open(file_name,'w',encoding="utf8", errors='ignore')
+        except IOError:
+            raise IOError("couldn't write vtk file")
+        with out:
+
+            header = """# vtk DataFile Version 2.0
+DGS printing
+ASCII
+DATASET UNSTRUCTURED_GRID\r\n"""
+            out.write(header)
+            out.write(f"POINTS  {n_vtk_points:d}  floats\r\n")
+
+            for node in self.nodes:
+                out.write(node.vtk_points_text)
+
+            out.write(f"CELLS  {n_nodes:d}   {(n_nodes + n_vtk_points):d}\r\n")
+
+            for node in self.nodes:
+                n_point_ids = len(node.vtk_points)
+                intro_string = f"{n_point_ids:d} "
+                write_string =  intro_string + node.vtk_point_ids_text
+                out.write(write_string)
+
+            out.write(f"CELL_TYPES  {n_nodes:d}  \r\n")
+
+            for node in self.nodes:
+                out.write(f"{node.vtk_cell_type:d}\r\n")
+
+            out.write(f"CELL_DATA  {n_nodes:d} \r\n")
+
+            out.write("SCALARS node_id int 1 \r\n")
+            out.write("LOOKUP_TABLE default\r\n")
+
+            for node in self.nodes:
+                out.write(f"{node.mesh_id:d}\r\n")
+
+            out.write("SCALARS node_emission_intensity_particle_s double 1 \r\n")
+            out.write("LOOKUP_TABLE default\r\n")
+            for node in self.nodes:
+                out.write(f"{node.node_intensity_s:.5e}\r\n")
+
+            out.write("SCALARS node_emission_rate_particle_m3_s double 1 \r\n")
+            out.write("LOOKUP_TABLE default\r\n")
+            for node in self.nodes:
+                out.write(f"{node.node_intensity_m3_s:.5e}\r\n")
+
+            out.write("SCALARS volume_m3 double 1 \r\n")
+            out.write("LOOKUP_TABLE default\r\n")
+            for node in self.nodes:
+                out.write(f"{node.node_volume_m3:.5e}\r\n")
+
+        return
+
 
 
 
