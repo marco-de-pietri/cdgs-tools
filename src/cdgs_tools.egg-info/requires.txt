@@ -1,3 +1,0 @@
-numpy<2,>=1.21
-vtk
-pyvista

@@ -1,2 +1,0 @@
-[console_scripts]
-cdgs_stl_filter = cdgs_tools.cdgs_filter:main
