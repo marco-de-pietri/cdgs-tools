@@ -7,26 +7,21 @@ build-backend = "setuptools.build_meta"
 name = "cdgs-tools"
 version = "0.1"
 description = "some tools for using CDGS files"
-authors = [
-    { name = "Marco De Pietri", email = "mdepietri@ind.uned.es" }
-]
+authors = [{ name = "Marco De Pietri", email = "mdepietri@ind.uned.es" }]
 
 # Python requirement
 requires-python = ">=3.12, <3.13"
 
 # Project dependencies (install_requires)
-dependencies = [
-  "numpy>=1.21,<2",
-  "vtk",
-  "pyvista",
-]
+dependencies = ["numpy>=1.21,<2", "vtk", "pyvista"]
 
 
 [project.scripts]
 cdgs_stl_filter = "cdgs_tools.cdgs_stl_filter:main"
+cdgs_pipes2vtk = "cdgs_tools.cdgs_pipes2vtk:main"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
