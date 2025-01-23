@@ -9,7 +9,9 @@ def main():
 
     # get the a cdgs file and a stl as inputs with argparse
 
-    parser = argparse.ArgumentParser(description="Filter a CDGS file with a stl file v0")
+    parser = argparse.ArgumentParser(
+        description="Filter a CDGS file with a stl file v0"
+    )
 
     parser.add_argument("cdgs", type=str, help="The CDGS file to filter")
     parser.add_argument("stl", type=str, help="The STL file to filter with")
@@ -17,7 +19,6 @@ def main():
     args = parser.parse_args()
 
     cdgs_filename_split = args.cdgs.split(".")
-
 
     if len(cdgs_filename_split) == 1:
         cdgs_filename = cdgs_filename_split[0]
@@ -31,8 +32,7 @@ def main():
 
     cdgs_object = read_cdgs_file(args.cdgs)
 
-
-    cdgs_object_filtered = cdgs_object.filter_with_stl(args.stl)
+    cdgs_object_filtered = cdgs_object.filter_by_stl(args.stl)
 
     cdgs_object_filtered.write_cdgs(f"{cdgs_filename}_filtered.{cdgs_extension}")
 

@@ -240,15 +240,14 @@ def read_cdgs_file(cdgs_file: str) -> object:
             cyl_node.generate_cdgs_text()
             cyl_node.generate_vtk_points()
             cyl_node.generate_vtk_points_text()
-            point_ids = [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
-                          12,13,14,15,16,17,18,19,20,21,22,23]
-            cyl_node.vtk_point_ids = [(cdgs_object._tot_vtk_points + i) for i in point_ids]
-            cyl_node.generate_vtk_points_ids_text()
             cyl_node.vtk_cell_type = 33
             cyl_node.node_intensity_m3_s = cyl_node.node_intensity_s / cyl_node.node_volume_m3
 
             cdgs_object.add_node(cyl_node)
 
+        # assign numbers to the vtk data points
+
+        cdgs_object.renumber_vtk_points()
 
         if cdgs_object.tot_meshes != cdgs_nodes_number:
             print("mismatch number of nodes!")
@@ -329,7 +328,22 @@ class CDGS:
         self._tot_meshes += 1
         self._tot_intensity += node.node_intensity_s
         self._tot_volume += node.node_volume_cm3
-        self._tot_vtk_points += len(node.vtk_points)
+
+    def renumber_vtk_points(self) -> None:
+        """
+        this funtion gives a sequential number to the vtk point ids in a cdgs objects
+        """
+
+        count = 0
+
+        for node in self.nodes:
+            ids_vector = list(range(len(node.vtk_points)))
+            ids_vector = [id + count for id in ids_vector]
+            node.vtk_point_ids = ids_vector
+            count += len(node.vtk_points)
+            node.generate_vtk_points_ids_text()
+
+        return
 
     def renumber_nodes(self) -> None:
         """
@@ -337,6 +351,7 @@ class CDGS:
         """
         for i, node in enumerate(self.nodes):
             node.mesh_id = i
+            node.generate_cdgs_text()
 
     def filter_by_stl (self, stl_file) -> object:
         """
@@ -352,6 +367,7 @@ class CDGS:
                 cdgs_subset.add_node(node)
 
         cdgs_subset.renumber_nodes()
+        cdgs_subset.renumber_vtk_points()
 
         return cdgs_subset
 
