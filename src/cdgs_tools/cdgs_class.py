@@ -371,6 +371,18 @@ class CDGS:
 
         return cdgs_subset
 
+    def extend_cdgs(self, cdgs_object) -> None:
+        """
+        extend the cdgs object with the nodes from another cdgs object
+        """
+
+        for node in cdgs_object.nodes:
+            self.add_node(node)
+
+        self.renumber_nodes()
+        self.renumber_vtk_points()
+
+
     def write_cdgs (self, output_file) -> None:
         """
         write the cdgs object to a file
